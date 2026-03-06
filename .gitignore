@@ -1,0 +1,9 @@
+# Arquivos pessoais (cada pessoa tem o seu)
+meu-perfil.md
+entregas.md
+
+# Sistema operacional
+.DS_Store
+
+# Claude Code
+.claude/settings.local.json
