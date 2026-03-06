@@ -150,6 +150,59 @@ _Nenhuma entrega registrada neste ciclo._
 
 ---
 
+### Eliminação de Single Point of Failure no Dataprev Proxy
+**Data:** 2026-02-14
+**Ref:** NC-2578
+
+**Contexto:** O dataprev-proxy processava ~218.620 requests/dia mas operava com apenas 1 pod devido a limitações arquiteturais críticas: token OAuth armazenado em memória local e rate limiting local. Essa arquitetura gerava 6.968 erros 503 em 15 dias (taxa global de 0.212%), com impacto severo no bidreader (1.055% error rate), comprometendo a disponibilidade e confiabilidade do serviço de e-Consignado.
+
+**O que fiz:**
+- Implementei infraestrutura Redis distribuída com cliente e dependências, permitindo estado compartilhado entre múltiplos pods
+- Migrei armazenamento do token OAuth de memória local para Redis com prefixo isolado por variante (normal, inss, tombamento)
+- Criei sistema de feature flags para deploy incremental e rollback seguro das mudanças
+- Implementei timeout configurável via header (X-Proxy-Timeout) com validação e conversão para milissegundos, aumentando flexibilidade operacional
+- Adicionei instrumentação automática do Redis para observabilidade e monitoramento
+- Documentei especificação técnica completa e decisões arquiteturais para autonomia do time
+
+**Impacto:**
+- Negócio: Eliminação efetiva do SPOF no serviço de e-Consignado; redução confirmada de +7.000 para apenas 3 erros 503/dia (-99,8% no total), com eliminação total de erros em 4 dos 5 serviços consumidores
+- Técnico:
+  - **Antes:** 1 pod único, impossibilidade de escalar horizontalmente, token OAuth perdido a cada deploy/restart
+  - **Depois:** Serviço rodando com múltiplos pods com estado compartilhado via Redis, escalabilidade horizontal confirmada em produção, token OAuth persistido e resiliente a restarts
+  - Observabilidade aprimorada com métricas automáticas do Redis
+  - Base técnica para rate limiting distribuído futuro
+- Resultados medidos pós-implementação (13-14/02/2026):
+
+  | Serviço | 503s/dia (baseline) | 503s/dia (pós-impl) | Redução |
+  |---|---|---|---|
+  | loans.e-consignado-bidreader | 3.648 | 3 | -99,8% |
+  | econsignado-employees-endpoint | 3.507 | 0 | -100% |
+  | econsignado-proposals-endpoint | 16 | 0 | -100% |
+  | proposal-events-endpoint | 15 | 0 | -100% |
+  | finish-contract | 17 | 0 | -100% |
+  | **TOTAL** | **+7.000** | **3** | **-99,8%** |
+
+**Competências demonstradas (L5):**
+- **Técnico & Qualidade:** Avaliei trade-offs arquiteturais complexos (Redis vs alternativas, feature flags vs deploy direto) e antecipei movimentos necessários para evitar degradação de serviço. Implementei solução que mitiga riscos críticos de disponibilidade
+- **Autonomia & Planejamento:** Naveguei entre múltiplas áreas técnicas (infraestrutura Redis, OAuth, observabilidade, feature flags) para resolver problema arquitetural complexo que bloqueava escalabilidade do serviço
+- **Processos & Métricas:** Realizei diagnóstico baseado em métricas do Datadog (error rate, distribuição de erros por serviço consumidor) para quantificar o problema e definir baseline para medição de sucesso pós-implementação
+- **Influência & Liderança:** Documentação técnica detalhada eleva conhecimento do time sobre gestão de estado distribuído e permite evolução futura (rate limiting, observabilidade adicional)
+
+**Colaboração:** Trabalho individual
+
+**Evidências:**
+- Card: https://neonpagamentos.atlassian.net/browse/NC-2578
+- Especificação técnica: https://github.com/neon/loans.e-consignado/blob/main/docs/plans/nc-2578-redis-timeout/README.md
+- Análise de baseline (métricas pré-implementação): https://github.com/neon/loans.e-consignado/blob/main/docs/metrics/nc-2578/baseline-collected.md
+- PRs implementação:
+  - Feature Flags: https://github.com/neon/loans.e-consignado/pull/1183
+  - Timeout configurável: https://github.com/neon/loans.e-consignado/pull/1184
+  - Redis Infrastructure: https://github.com/neon/loans.e-consignado/pull/1189
+  - Token Store distribuído: https://github.com/neon/loans.e-consignado/pull/1192
+- Notebook Datadog com resultados pós-implementação: https://app.datadoghq.com/notebook/13959161/nc-2578-%25E2%2580%2594-evid%25C3%25AAncia-redu%25C3%25A7%25C3%25A3o-de-erros-503-p%25C3%25B3s-redis-token-store _(link pode expirar — backup salvo em `evidencias/NC-2578-reducao-erros-503-pos-redis-token-store.pdf`)_
+
+---
+
 ### Desativação de Ambientes de Dev/TST Obsoletos e Redução de Custo AWS
 **Data:** 2026-02-25
 
@@ -246,56 +299,3 @@ _Nenhuma entrega registrada neste ciclo._
 - Jira (action item pós-crise): https://neonpagamentos.atlassian.net/browse/AI-593
 - Esteira de exemplo: https://github.com/neon/loans.database-core/actions/runs/22728063143
 - PR: https://github.com/neon/loans.database-core/pull/845
-
----
-
-### Eliminação de Single Point of Failure no Dataprev Proxy
-**Data:** 2026-02-14
-**Ref:** NC-2578
-
-**Contexto:** O dataprev-proxy processava ~218.620 requests/dia mas operava com apenas 1 pod devido a limitações arquiteturais críticas: token OAuth armazenado em memória local e rate limiting local. Essa arquitetura gerava 6.968 erros 503 em 15 dias (taxa global de 0.212%), com impacto severo no bidreader (1.055% error rate), comprometendo a disponibilidade e confiabilidade do serviço de e-Consignado.
-
-**O que fiz:**
-- Implementei infraestrutura Redis distribuída com cliente e dependências, permitindo estado compartilhado entre múltiplos pods
-- Migrei armazenamento do token OAuth de memória local para Redis com prefixo isolado por variante (normal, inss, tombamento)
-- Criei sistema de feature flags para deploy incremental e rollback seguro das mudanças
-- Implementei timeout configurável via header (X-Proxy-Timeout) com validação e conversão para milissegundos, aumentando flexibilidade operacional
-- Adicionei instrumentação automática do Redis para observabilidade e monitoramento
-- Documentei especificação técnica completa e decisões arquiteturais para autonomia do time
-
-**Impacto:**
-- Negócio: Eliminação efetiva do SPOF no serviço de e-Consignado; redução confirmada de +7.000 para apenas 3 erros 503/dia (-99,8% no total), com eliminação total de erros em 4 dos 5 serviços consumidores
-- Técnico:
-  - **Antes:** 1 pod único, impossibilidade de escalar horizontalmente, token OAuth perdido a cada deploy/restart
-  - **Depois:** Serviço rodando com múltiplos pods com estado compartilhado via Redis, escalabilidade horizontal confirmada em produção, token OAuth persistido e resiliente a restarts
-  - Observabilidade aprimorada com métricas automáticas do Redis
-  - Base técnica para rate limiting distribuído futuro
-- Resultados medidos pós-implementação (13-14/02/2026):
-
-  | Serviço | 503s/dia (baseline) | 503s/dia (pós-impl) | Redução |
-  |---|---|---|---|
-  | loans.e-consignado-bidreader | 3.648 | 3 | -99,8% |
-  | econsignado-employees-endpoint | 3.507 | 0 | -100% |
-  | econsignado-proposals-endpoint | 16 | 0 | -100% |
-  | proposal-events-endpoint | 15 | 0 | -100% |
-  | finish-contract | 17 | 0 | -100% |
-  | **TOTAL** | **+7.000** | **3** | **-99,8%** |
-
-**Competências demonstradas (L5):**
-- **Técnico & Qualidade:** Avaliei trade-offs arquiteturais complexos (Redis vs alternativas, feature flags vs deploy direto) e antecipei movimentos necessários para evitar degradação de serviço. Implementei solução que mitiga riscos críticos de disponibilidade
-- **Autonomia & Planejamento:** Naveguei entre múltiplas áreas técnicas (infraestrutura Redis, OAuth, observabilidade, feature flags) para resolver problema arquitetural complexo que bloqueava escalabilidade do serviço
-- **Processos & Métricas:** Realizei diagnóstico baseado em métricas do Datadog (error rate, distribuição de erros por serviço consumidor) para quantificar o problema e definir baseline para medição de sucesso pós-implementação
-- **Influência & Liderança:** Documentação técnica detalhada eleva conhecimento do time sobre gestão de estado distribuído e permite evolução futura (rate limiting, observabilidade adicional)
-
-**Colaboração:** Trabalho individual
-
-**Evidências:**
-- Card: https://neonpagamentos.atlassian.net/browse/NC-2578
-- Especificação técnica: https://github.com/neon/loans.e-consignado/blob/main/docs/plans/nc-2578-redis-timeout/README.md
-- Análise de baseline (métricas pré-implementação): https://github.com/neon/loans.e-consignado/blob/main/docs/metrics/nc-2578/baseline-collected.md
-- PRs implementação:
-  - Feature Flags: https://github.com/neon/loans.e-consignado/pull/1183
-  - Timeout configurável: https://github.com/neon/loans.e-consignado/pull/1184
-  - Redis Infrastructure: https://github.com/neon/loans.e-consignado/pull/1189
-  - Token Store distribuído: https://github.com/neon/loans.e-consignado/pull/1192
-- Notebook Datadog com resultados pós-implementação: https://app.datadoghq.com/notebook/13959161/nc-2578-%25E2%2580%2594-evid%25C3%25AAncia-redu%25C3%25A7%25C3%25A3o-de-erros-503-p%25C3%25B3s-redis-token-store _(link pode expirar — backup salvo em `evidencias/NC-2578-reducao-erros-503-pos-redis-token-store.pdf`)_

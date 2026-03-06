@@ -79,7 +79,7 @@ Se o usuário der respostas vagas ou você perceber oportunidade de destacar mai
 5. Identifique o ciclo atual baseado na data:
    - Janeiro a Junho = H1 do ano corrente
    - Julho a Dezembro = H2 do ano corrente
-6. Adicione a nova entrega no ciclo correto
+6. Adicione a nova entrega no ciclo correto, **na posição correta por data** (ordem cronológica crescente — a mais antiga primeiro, a mais recente por último)
 7. Mostre um resumo do que foi registrado e pergunte se o usuário quer ajustar algo
 
 ## Formato da entrega:
